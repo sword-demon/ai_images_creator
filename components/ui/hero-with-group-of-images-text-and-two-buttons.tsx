@@ -1,6 +1,7 @@
 import { MoveRight, PhoneCall } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 
 function Hero() {
   return (
@@ -13,7 +14,7 @@ function Hero() {
             </div>
             <div className="flex gap-4 flex-col">
               <h1 className="text-5xl md:text-7xl max-w-lg tracking-tighter text-left font-regular">
-                用文字创造无限可能
+                AI智能图像生成器
               </h1>
               <p className="text-xl leading-relaxed tracking-tight text-muted-foreground max-w-md text-left">
                 告别复杂的图像设计工具，只需输入你的想法，我们的 AI
@@ -22,12 +23,16 @@ function Hero() {
               </p>
             </div>
             <div className="flex flex-row gap-4">
-              <Button size="lg" className="gap-4" variant="outline">
-                联系我们 <PhoneCall className="w-4 h-4" />
-              </Button>
-              <Button size="lg" className="gap-4">
-                立即开始 <MoveRight className="w-4 h-4" />
-              </Button>
+              <Link href="/support">
+                <Button size="lg" className="gap-4" variant="outline">
+                  联系我们 <PhoneCall className="w-4 h-4" />
+                </Button>
+              </Link>
+              <Link href="/auth/sign-in">
+                <Button size="lg" className="gap-4">
+                  立即开始 <MoveRight className="w-4 h-4" />
+                </Button>
+              </Link>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-8">
