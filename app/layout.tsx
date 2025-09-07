@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import { FloatingNavDemo } from "@/components/floating-nav-demo";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -34,10 +33,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {/* 全局悬浮导航栏 */}
-          <FloatingNavDemo />
-          {/* 给页面内容添加顶部间距，避免被导航栏遮挡 */}
-          <div className="pt-20">{children}</div>
+          {children}
         </ThemeProvider>
       </body>
     </html>
