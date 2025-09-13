@@ -10,16 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Plus,
-  Coins,
-  Sparkles,
-  X,
-  AlertCircle,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-} from "lucide-react";
+import { ProtectedNavbar } from "@/components/protected-navbar";
+import { Plus, Coins, Sparkles, X, AlertCircle, Download } from "lucide-react";
 
 // 定义接口类型
 interface TaskResponse {
@@ -54,7 +46,7 @@ export default function ProtectedPage() {
   const [error, setError] = useState<string>("");
   const [currentTaskId, setCurrentTaskId] = useState<string>("");
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [previewImage, setPreviewImage] = useState<string>("");
   const [isLoadingCredits, setIsLoadingCredits] = useState(true);
 
   // 创建图片生成任务
@@ -244,23 +236,10 @@ export default function ProtectedPage() {
     setPrompt("");
   };
 
-  // 打开图片预览
-  const handleImagePreview = (index: number) => {
-    setCurrentImageIndex(index);
+  // 图片预览 - 单张图片预览
+  const handleImagePreview = (imageUrl: string) => {
+    setPreviewImage(imageUrl);
     setPreviewOpen(true);
-  };
-
-  // 轮播图导航
-  const handlePreviousImage = () => {
-    setCurrentImageIndex((prev) =>
-      prev === 0 ? generatedImages.length - 1 : prev - 1
-    );
-  };
-
-  const handleNextImage = () => {
-    setCurrentImageIndex((prev) =>
-      prev === generatedImages.length - 1 ? 0 : prev + 1
-    );
   };
 
   // 下载图片
@@ -283,6 +262,9 @@ export default function ProtectedPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* 导航栏 */}
+      <ProtectedNavbar />
+
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* 顶部输入区域 */}
         <div className="flex items-center gap-4 mb-8">
@@ -305,13 +287,6 @@ export default function ProtectedPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 bg-muted px-4 h-12 rounded-lg">
-            <Coins className="w-4 h-4 text-yellow-500" />
-            <span className="font-medium">
-              {isLoadingCredits ? "..." : points}
-            </span>
-          </div>
-
           <Button onClick={handleRecharge} variant="outline" className="h-12">
             充值
           </Button>
@@ -325,24 +300,29 @@ export default function ProtectedPage() {
           </div>
         )}
 
-        {/* 图片展示区域 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* 图片展示区域 - 瀑布流布局 */}
+        <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-6 space-y-6">
           {/* 骨架屏加载效果 */}
           {isGenerating && (
             <>
               {Array.from({ length: 4 }).map((_, index) => (
-                <Card key={`skeleton-${index}`} className="overflow-hidden">
-                  <CardContent className="p-0">
-                    <div className="relative aspect-square">
-                      <div className="w-full h-full bg-gray-200 animate-pulse flex items-center justify-center">
-                        <div className="text-center">
-                          <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                          <p className="text-sm text-gray-500">生成中...</p>
+                <div
+                  key={`skeleton-${index}`}
+                  className="break-inside-avoid mb-6"
+                >
+                  <Card className="overflow-hidden">
+                    <CardContent className="p-0">
+                      <div className="relative aspect-square">
+                        <div className="w-full h-full bg-gray-200 animate-pulse flex items-center justify-center">
+                          <div className="text-center">
+                            <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                            <p className="text-sm text-gray-500">生成中...</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </div>
               ))}
             </>
           )}
@@ -351,72 +331,76 @@ export default function ProtectedPage() {
           {generatedImages.length > 0 &&
             !isGenerating &&
             generatedImages.map((image, index) => (
-              <Card
-                key={index}
-                className="overflow-hidden group hover:shadow-lg transition-shadow cursor-pointer"
-                onClick={() => handleImagePreview(index)}
-              >
-                <CardContent className="p-0">
-                  <div className="relative aspect-square">
-                    <img
-                      src={image}
-                      alt={`生成的图片 ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                      1.00
+              <div key={index} className="break-inside-avoid mb-6">
+                <Card className="overflow-hidden group hover:shadow-lg transition-shadow cursor-pointer">
+                  <CardContent className="p-0">
+                    <div
+                      className="relative"
+                      onClick={() => handleImagePreview(image)}
+                    >
+                      <img
+                        src={image}
+                        alt={`生成的图片 ${index + 1}`}
+                        className="w-full h-auto object-cover"
+                        loading="lazy"
+                      />
+                      <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                        1.00
+                      </div>
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownloadImage(image, index);
+                          }}
+                        >
+                          <Download className="w-4 h-4 mr-1" />
+                          下载
+                        </Button>
+                      </div>
                     </div>
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDownloadImage(image, index);
-                        }}
-                      >
-                        <Download className="w-4 h-4 mr-1" />
-                        下载
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </div>
             ))}
 
           {/* 占位卡片（无图片且未生成时） */}
           {generatedImages.length === 0 && !isGenerating && (
-            <Card className="col-span-full md:col-span-2 lg:col-span-4">
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
-                  <Sparkles className="w-8 h-8 text-muted-foreground" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">
-                  开始创作您的第一张图片
-                </h3>
-                <p className="text-muted-foreground mb-6 max-w-md">
-                  在上方输入框中描述您想要生成的图片，我们的 AI
-                  将为您创造出独特的艺术作品
-                </p>
-                <Button
-                  onClick={handleGenerate}
-                  disabled={!prompt.trim() || isGenerating}
-                  className="gap-2"
-                >
-                  {isGenerating ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      生成中...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      开始生成
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="break-inside-avoid mb-6">
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+                    <Sparkles className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">
+                    开始创作您的第一张图片
+                  </h3>
+                  <p className="text-muted-foreground mb-6 max-w-md">
+                    在上方输入框中描述您想要生成的图片，我们的 AI
+                    将为您创造出独特的艺术作品
+                  </p>
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={!prompt.trim() || isGenerating}
+                    className="gap-2"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        生成中...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        开始生成
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
 
@@ -458,75 +442,23 @@ export default function ProtectedPage() {
         <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
           <DialogContent className="max-w-4xl max-h-[90vh] p-0">
             <DialogHeader className="p-6 pb-0">
-              <DialogTitle className="text-center">
-                图片预览 ({currentImageIndex + 1} / {generatedImages.length})
-              </DialogTitle>
+              <DialogTitle className="text-center">图片预览</DialogTitle>
             </DialogHeader>
 
             <div className="relative p-6">
               {/* 主图片显示区域 */}
-              <div className="relative aspect-square max-h-[60vh] bg-gray-100 rounded-lg overflow-hidden">
+              <div className="relative max-w-full max-h-[70vh] bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
                 <img
-                  src={generatedImages[currentImageIndex]}
-                  alt={`预览图片 ${currentImageIndex + 1}`}
-                  className="w-full h-full object-contain"
+                  src={previewImage}
+                  alt="预览图片"
+                  className="max-w-full max-h-full object-contain"
                 />
-
-                {/* 导航按钮 */}
-                {generatedImages.length > 1 && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white"
-                      onClick={handlePreviousImage}
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white"
-                      onClick={handleNextImage}
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
               </div>
-
-              {/* 缩略图导航 */}
-              {generatedImages.length > 1 && (
-                <div className="mt-4 flex gap-2 justify-center overflow-x-auto">
-                  {generatedImages.map((image, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setCurrentImageIndex(index)}
-                      className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
-                        index === currentImageIndex
-                          ? "border-primary"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <img
-                        src={image}
-                        alt={`缩略图 ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
 
               {/* 操作按钮 */}
               <div className="mt-6 flex justify-center gap-4">
                 <Button
-                  onClick={() =>
-                    handleDownloadImage(
-                      generatedImages[currentImageIndex],
-                      currentImageIndex
-                    )
-                  }
+                  onClick={() => handleDownloadImage(previewImage, 0)}
                   className="gap-2"
                 >
                   <Download className="w-4 h-4" />
