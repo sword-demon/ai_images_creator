@@ -11,7 +11,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ProtectedNavbar } from "@/components/protected-navbar";
-import { Plus, Coins, Sparkles, X, AlertCircle, Download } from "lucide-react";
+import {
+  Plus,
+  Coins,
+  Sparkles,
+  X,
+  AlertCircle,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
 // 定义接口类型
 interface TaskResponse {
@@ -38,15 +47,25 @@ interface TaskResult {
   };
 }
 
+// 历史记录接口
+interface HistoryRecord {
+  id: string;
+  prompt: string;
+  images: string[];
+  created_at: string;
+  status: string;
+}
+
 export default function ProtectedPage() {
   const [prompt, setPrompt] = useState("");
   const [points, setPoints] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([]);
   const [error, setError] = useState<string>("");
   const [currentTaskId, setCurrentTaskId] = useState<string>("");
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string>("");
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isLoadingCredits, setIsLoadingCredits] = useState(true);
 
   // 创建图片生成任务
@@ -130,7 +149,19 @@ export default function ProtectedPage() {
 
       // 轮询结果
       const imageUrls = await pollTaskStatus(taskId);
-      setGeneratedImages((prev) => [...prev, ...imageUrls]);
+
+      // 创建新的历史记录
+      const newRecord: HistoryRecord = {
+        id: taskId,
+        prompt: prompt,
+        images: imageUrls,
+        created_at: new Date().toISOString(),
+        status: "completed",
+      };
+
+      // 将新记录添加到历史记录列表的开头
+      setHistoryRecords((prev) => [newRecord, ...prev]);
+
       // 重新获取最新的点数
       await fetchCredits();
     } catch (err) {
@@ -177,17 +208,28 @@ export default function ProtectedPage() {
       const response = await fetch("/api/user/history?limit=100");
       if (response.ok) {
         const data = await response.json();
-        const allImages: string[] = [];
+        const records: HistoryRecord[] = [];
+
         data.history.forEach((record: any) => {
           if (record.images && Array.isArray(record.images)) {
             // 过滤掉空字符串，只添加有效的图片URL
             const validImages = record.images.filter(
               (url: string) => url && url.trim() !== ""
             );
-            allImages.push(...validImages);
+
+            if (validImages.length > 0) {
+              records.push({
+                id: record.id || record.task_id || Date.now().toString(),
+                prompt: record.prompt || "未知提示词",
+                images: validImages,
+                created_at: record.created_at || new Date().toISOString(),
+                status: record.status || "completed",
+              });
+            }
           }
         });
-        setGeneratedImages(allImages);
+
+        setHistoryRecords(records);
       }
     } catch (error) {
       console.error("获取历史记录失败:", error);
@@ -236,10 +278,24 @@ export default function ProtectedPage() {
     setPrompt("");
   };
 
-  // 图片预览 - 单张图片预览
-  const handleImagePreview = (imageUrl: string) => {
-    setPreviewImage(imageUrl);
+  // 图片预览 - 轮播图预览
+  const handleImagePreview = (images: string[], startIndex: number = 0) => {
+    setPreviewImages(images);
+    setCurrentImageIndex(startIndex);
     setPreviewOpen(true);
+  };
+
+  // 轮播图导航
+  const handlePreviousImage = () => {
+    setCurrentImageIndex((prev) =>
+      prev === 0 ? previewImages.length - 1 : prev - 1
+    );
+  };
+
+  const handleNextImage = () => {
+    setCurrentImageIndex((prev) =>
+      prev === previewImages.length - 1 ? 0 : prev + 1
+    );
   };
 
   // 下载图片
@@ -300,17 +356,14 @@ export default function ProtectedPage() {
           </div>
         )}
 
-        {/* 图片展示区域 - 瀑布流布局 */}
-        <div className="w-full waterfall-container">
+        {/* 历史记录展示区域 */}
+        <div className="w-full space-y-8">
           {/* 骨架屏加载效果 */}
           {isGenerating && (
-            <>
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div
-                  key={`skeleton-${index}`}
-                  className="break-inside-avoid mb-6"
-                >
-                  <Card className="overflow-hidden">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <Card key={`skeleton-${index}`} className="overflow-hidden">
                     <CardContent className="p-0">
                       <div className="relative h-64">
                         <div className="w-full h-full bg-gray-200 animate-pulse flex items-center justify-center">
@@ -322,54 +375,89 @@ export default function ProtectedPage() {
                       </div>
                     </CardContent>
                   </Card>
-                </div>
-              ))}
-            </>
+                ))}
+              </div>
+            </div>
           )}
 
-          {/* 已生成的图片 */}
-          {generatedImages.length > 0 &&
-            !isGenerating &&
-            generatedImages.map((image, index) => (
-              <div key={index} className="break-inside-avoid mb-6">
-                <Card className="overflow-hidden group hover:shadow-lg transition-shadow cursor-pointer">
-                  <CardContent className="p-0">
-                    <div
-                      className="relative"
-                      onClick={() => handleImagePreview(image)}
-                    >
-                      <img
-                        src={image}
-                        alt={`生成的图片 ${index + 1}`}
-                        className="w-full h-auto object-cover"
-                        loading="lazy"
-                      />
-                      <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                        1.00
-                      </div>
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownloadImage(image, index);
-                          }}
-                        >
-                          <Download className="w-4 h-4 mr-1" />
-                          下载
-                        </Button>
-                      </div>
+          {/* 历史记录列表 */}
+          {historyRecords.length > 0 && !isGenerating && (
+            <div className="space-y-8">
+              {historyRecords.map((record, recordIndex) => (
+                <div key={record.id} className="space-y-4">
+                  {/* 历史记录信息 */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-foreground">
+                        {record.prompt}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(record.created_at).toLocaleString("zh-CN", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
-            ))}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                        {record.images.length} 张图片
+                      </span>
+                    </div>
+                  </div>
 
-          {/* 占位卡片（无图片且未生成时） */}
-          {generatedImages.length === 0 && !isGenerating && (
-            <div className="break-inside-avoid mb-6">
-              <Card>
+                  {/* 图片网格 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {record.images.map((image, imageIndex) => (
+                      <Card
+                        key={`${record.id}-${imageIndex}`}
+                        className="overflow-hidden group hover:shadow-lg transition-shadow cursor-pointer"
+                      >
+                        <CardContent className="p-0">
+                          <div
+                            className="relative"
+                            onClick={() =>
+                              handleImagePreview(record.images, imageIndex)
+                            }
+                          >
+                            <img
+                              src={image}
+                              alt={`${record.prompt} - 图片 ${imageIndex + 1}`}
+                              className="w-full h-64 object-cover"
+                              loading="lazy"
+                            />
+                            <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                              1.00
+                            </div>
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownloadImage(image, imageIndex);
+                                }}
+                              >
+                                <Download className="w-4 h-4 mr-1" />
+                                下载
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 占位卡片（无历史记录且未生成时） */}
+          {historyRecords.length === 0 && !isGenerating && (
+            <div className="flex justify-center">
+              <Card className="w-full max-w-md">
                 <CardContent className="flex flex-col items-center justify-center py-16 text-center">
                   <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
                     <Sparkles className="w-8 h-8 text-muted-foreground" />
@@ -404,8 +492,8 @@ export default function ProtectedPage() {
           )}
         </div>
 
-        {/* 生成按钮（当有图片时显示） */}
-        {generatedImages.length > 0 && !isGenerating && (
+        {/* 生成按钮（当有历史记录时显示） */}
+        {historyRecords.length > 0 && !isGenerating && (
           <div className="mt-8 text-center">
             <Button
               onClick={handleGenerate}
@@ -438,27 +526,79 @@ export default function ProtectedPage() {
           </div>
         )}
 
-        {/* 图片预览弹框 */}
+        {/* 图片预览弹框 - 轮播图 */}
         <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+          <DialogContent className="max-w-5xl max-h-[95vh] p-0">
             <DialogHeader className="p-6 pb-0">
-              <DialogTitle className="text-center">图片预览</DialogTitle>
+              <DialogTitle className="text-center">
+                图片预览 ({currentImageIndex + 1} / {previewImages.length})
+              </DialogTitle>
             </DialogHeader>
 
             <div className="relative p-6">
               {/* 主图片显示区域 */}
               <div className="relative max-w-full max-h-[70vh] bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
                 <img
-                  src={previewImage}
-                  alt="预览图片"
+                  src={previewImages[currentImageIndex]}
+                  alt={`预览图片 ${currentImageIndex + 1}`}
                   className="max-w-full max-h-full object-contain"
                 />
+
+                {/* 导航按钮 */}
+                {previewImages.length > 1 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white"
+                      onClick={handlePreviousImage}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white"
+                      onClick={handleNextImage}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
               </div>
+
+              {/* 缩略图导航 */}
+              {previewImages.length > 1 && (
+                <div className="mt-4 flex gap-2 justify-center overflow-x-auto">
+                  {previewImages.map((image, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentImageIndex(index)}
+                      className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
+                        index === currentImageIndex
+                          ? "border-primary"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <img
+                        src={image}
+                        alt={`缩略图 ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* 操作按钮 */}
               <div className="mt-6 flex justify-center gap-4">
                 <Button
-                  onClick={() => handleDownloadImage(previewImage, 0)}
+                  onClick={() =>
+                    handleDownloadImage(
+                      previewImages[currentImageIndex],
+                      currentImageIndex
+                    )
+                  }
                   className="gap-2"
                 >
                   <Download className="w-4 h-4" />
