@@ -301,7 +301,7 @@ export default function ProtectedPage() {
         )}
 
         {/* 图片展示区域 - 瀑布流布局 */}
-        <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-6 space-y-6">
+        <div className="w-full waterfall-container">
           {/* 骨架屏加载效果 */}
           {isGenerating && (
             <>
@@ -312,7 +312,7 @@ export default function ProtectedPage() {
                 >
                   <Card className="overflow-hidden">
                     <CardContent className="p-0">
-                      <div className="relative aspect-square">
+                      <div className="relative h-64">
                         <div className="w-full h-full bg-gray-200 animate-pulse flex items-center justify-center">
                           <div className="text-center">
                             <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />

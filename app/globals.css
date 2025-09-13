@@ -66,3 +66,36 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* 瀑布流布局样式 */
+@layer components {
+  .waterfall-container {
+    column-count: 1;
+    column-gap: 1.5rem;
+    column-fill: balance;
+  }
+  
+  @media (min-width: 640px) {
+    .waterfall-container {
+      column-count: 2;
+    }
+  }
+  
+  @media (min-width: 768px) {
+    .waterfall-container {
+      column-count: 3;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .waterfall-container {
+      column-count: 4;
+    }
+  }
+  
+  @media (min-width: 1280px) {
+    .waterfall-container {
+      column-count: 5;
+    }
+  }
+}

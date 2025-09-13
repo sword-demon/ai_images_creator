@@ -47,15 +47,27 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  if (
-    request.nextUrl.pathname !== "/" &&
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
-    request.nextUrl.pathname !== "/about" &&
-    request.nextUrl.pathname !== "/support"
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  // 允许访问的公开路径
+  const publicPaths = [
+    "/",
+    "/about", 
+    "/support",
+    "/auth/sign-in",
+    "/auth/sign-up",
+    "/auth/forgot-password",
+    "/auth/error",
+    "/auth/update-password",
+    "/auth/sign-up-success"
+  ];
+
+  // 检查是否为公开路径
+  const isPublicPath = publicPaths.some(path => 
+    request.nextUrl.pathname === path || 
+    request.nextUrl.pathname.startsWith(path + "/")
+  );
+
+  // 如果用户未登录且访问受保护路径，重定向到登录页
+  if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/sign-in";
     return NextResponse.redirect(url);
