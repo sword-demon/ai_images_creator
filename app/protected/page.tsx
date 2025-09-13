@@ -1,35 +1,133 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Coins, Sparkles, X } from "lucide-react";
+import { Plus, Coins, Sparkles, X, AlertCircle } from "lucide-react";
+
+// 定义接口类型
+interface TaskResponse {
+  output: {
+    task_status: string;
+    task_id: string;
+  };
+  request_id: string;
+}
+
+interface TaskResult {
+  request_id: string;
+  output: {
+    task_id: string;
+    task_status: string;
+    results: Array<{
+      orig_prompt: string;
+      actual_prompt?: string;
+      url: string;
+    }>;
+  };
+  usage: {
+    image_count: number;
+  };
+}
 
 export default function ProtectedPage() {
   const [prompt, setPrompt] = useState("");
   const [points, setPoints] = useState(5);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [error, setError] = useState<string>("");
+  const [currentTaskId, setCurrentTaskId] = useState<string>("");
 
-  // 模拟生成的图片数据
-  const mockImages = [
-    "https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400&h=400&fit=crop&crop=center",
-    "https://images.unsplash.com/photo-1558655146-9f40138edfeb?w=400&h=400&fit=crop&crop=center",
-    "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=400&fit=crop&crop=center",
-    "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=400&fit=crop&crop=center",
-  ];
+  // 创建图片生成任务
+  const createImageTask = async (promptText: string): Promise<string> => {
+    const response = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: promptText,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error || `创建任务失败: ${response.statusText}`
+      );
+    }
+
+    const data: TaskResponse = await response.json();
+    return data.output.task_id;
+  };
+
+  // 查询任务结果
+  const queryTaskResult = async (taskId: string): Promise<TaskResult> => {
+    const response = await fetch(`/api/query-task?taskId=${taskId}`, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error || `查询任务失败: ${response.statusText}`
+      );
+    }
+
+    return await response.json();
+  };
+
+  // 轮询任务状态
+  const pollTaskStatus = async (taskId: string): Promise<string[]> => {
+    return new Promise((resolve, reject) => {
+      const poll = async () => {
+        try {
+          const result = await queryTaskResult(taskId);
+          const { task_status, results } = result.output;
+
+          if (task_status === "SUCCEEDED") {
+            const imageUrls = results.map((item) => item.url);
+            resolve(imageUrls);
+          } else if (task_status === "FAILED") {
+            reject(new Error("图片生成失败"));
+          } else if (task_status === "PENDING" || task_status === "RUNNING") {
+            // 继续轮询
+            setTimeout(poll, 2000);
+          } else {
+            reject(new Error(`未知任务状态: ${task_status}`));
+          }
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      poll();
+    });
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
 
     setIsGenerating(true);
-    // 模拟生成过程
-    setTimeout(() => {
-      setGeneratedImages((prev) => [...prev, ...mockImages.slice(0, 1)]);
+    setError("");
+    setCurrentTaskId("");
+
+    try {
+      // 创建任务
+      const taskId = await createImageTask(prompt);
+      setCurrentTaskId(taskId);
+
+      // 轮询结果
+      const imageUrls = await pollTaskStatus(taskId);
+      setGeneratedImages((prev) => [...prev, ...imageUrls]);
       setPoints((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成图片时发生未知错误");
+    } finally {
       setIsGenerating(false);
-    }, 2000);
+      setCurrentTaskId("");
+    }
   };
 
   const handleRecharge = () => {
@@ -74,9 +172,39 @@ export default function ProtectedPage() {
           </Button>
         </div>
 
+        {/* 错误提示 */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+            <AlertCircle className="w-5 h-5" />
+            <span>{error}</span>
+          </div>
+        )}
+
         {/* 图片展示区域 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {generatedImages.length > 0 ? (
+          {/* 骨架屏加载效果 */}
+          {isGenerating && (
+            <>
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Card key={`skeleton-${index}`} className="overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="relative aspect-square">
+                      <div className="w-full h-full bg-gray-200 animate-pulse flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                          <p className="text-sm text-gray-500">生成中...</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </>
+          )}
+
+          {/* 已生成的图片 */}
+          {generatedImages.length > 0 &&
+            !isGenerating &&
             generatedImages.map((image, index) => (
               <Card
                 key={index}
@@ -100,9 +228,10 @@ export default function ProtectedPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))
-          ) : (
-            // 占位卡片
+            ))}
+
+          {/* 占位卡片（无图片且未生成时） */}
+          {generatedImages.length === 0 && !isGenerating && (
             <Card className="col-span-full md:col-span-2 lg:col-span-4">
               <CardContent className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
@@ -138,7 +267,7 @@ export default function ProtectedPage() {
         </div>
 
         {/* 生成按钮（当有图片时显示） */}
-        {generatedImages.length > 0 && (
+        {generatedImages.length > 0 && !isGenerating && (
           <div className="mt-8 text-center">
             <Button
               onClick={handleGenerate}
@@ -146,12 +275,7 @@ export default function ProtectedPage() {
               size="lg"
               className="gap-2"
             >
-              {isGenerating ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  生成中...
-                </>
-              ) : points === 0 ? (
+              {points === 0 ? (
                 "点数不足，请充值"
               ) : (
                 <>
@@ -160,6 +284,19 @@ export default function ProtectedPage() {
                 </>
               )}
             </Button>
+          </div>
+        )}
+
+        {/* 任务状态显示 */}
+        {isGenerating && currentTaskId && (
+          <div className="mt-8 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
+              <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              <span>正在生成图片，请稍候...</span>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              任务ID: {currentTaskId}
+            </p>
           </div>
         )}
       </div>
