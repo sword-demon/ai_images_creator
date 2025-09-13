@@ -48,13 +48,14 @@ interface TaskResult {
 
 export default function ProtectedPage() {
   const [prompt, setPrompt] = useState("");
-  const [points, setPoints] = useState(5);
+  const [points, setPoints] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [error, setError] = useState<string>("");
   const [currentTaskId, setCurrentTaskId] = useState<string>("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isLoadingCredits, setIsLoadingCredits] = useState(true);
 
   // 创建图片生成任务
   const createImageTask = async (promptText: string): Promise<string> => {
@@ -138,7 +139,8 @@ export default function ProtectedPage() {
       // 轮询结果
       const imageUrls = await pollTaskStatus(taskId);
       setGeneratedImages((prev) => [...prev, ...imageUrls]);
-      setPoints((prev) => Math.max(0, prev - 1));
+      // 重新获取最新的点数
+      await fetchCredits();
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成图片时发生未知错误");
     } finally {
@@ -147,8 +149,95 @@ export default function ProtectedPage() {
     }
   };
 
-  const handleRecharge = () => {
-    setPoints(5);
+  // 初始化用户数据
+  const initUserData = async () => {
+    try {
+      const response = await fetch("/api/user/init", {
+        method: "POST",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPoints(data.credits);
+      }
+    } catch (error) {
+      console.error("初始化用户数据失败:", error);
+    }
+  };
+
+  // 获取用户点数
+  const fetchCredits = async () => {
+    try {
+      const response = await fetch("/api/user/credits");
+      if (response.ok) {
+        const data = await response.json();
+        setPoints(data.credits);
+      }
+    } catch (error) {
+      console.error("获取点数失败:", error);
+    } finally {
+      setIsLoadingCredits(false);
+    }
+  };
+
+  // 获取历史记录
+  const fetchHistory = async () => {
+    try {
+      const response = await fetch("/api/user/history?limit=100");
+      if (response.ok) {
+        const data = await response.json();
+        const allImages: string[] = [];
+        data.history.forEach((record: any) => {
+          if (record.images && Array.isArray(record.images)) {
+            // 过滤掉空字符串，只添加有效的图片URL
+            const validImages = record.images.filter(
+              (url: string) => url && url.trim() !== ""
+            );
+            allImages.push(...validImages);
+          }
+        });
+        setGeneratedImages(allImages);
+      }
+    } catch (error) {
+      console.error("获取历史记录失败:", error);
+    }
+  };
+
+  // 页面加载时获取数据
+  useEffect(() => {
+    const initData = async () => {
+      // 先初始化用户数据，确保点数记录存在
+      await initUserData();
+      // 然后获取历史记录
+      await fetchHistory();
+      // 最后标记加载完成
+      setIsLoadingCredits(false);
+    };
+
+    initData();
+  }, []);
+
+  const handleRecharge = async () => {
+    try {
+      const response = await fetch("/api/user/recharge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ credits: 5 }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPoints(data.credits);
+        // 可以显示成功提示
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || "充值失败");
+      }
+    } catch (error) {
+      console.error("充值失败:", error);
+      setError("充值失败，请稍后重试");
+    }
   };
 
   const handleClearPrompt = () => {
@@ -218,7 +307,9 @@ export default function ProtectedPage() {
 
           <div className="flex items-center gap-2 bg-muted px-4 h-12 rounded-lg">
             <Coins className="w-4 h-4 text-yellow-500" />
-            <span className="font-medium">{points}</span>
+            <span className="font-medium">
+              {isLoadingCredits ? "..." : points}
+            </span>
           </div>
 
           <Button onClick={handleRecharge} variant="outline" className="h-12">

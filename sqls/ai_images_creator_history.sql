@@ -9,8 +9,10 @@ CREATE TABLE ai_images_creator_history (
   status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('pending', 'completed', 'failed')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   
-  -- 添加约束
-  CONSTRAINT valid_images_array CHECK (jsonb_array_length(images) = 4)
+  -- 添加约束：允许空数组（pending状态）或4个元素的数组（completed状态）
+  CONSTRAINT valid_images_array CHECK (
+    jsonb_array_length(images) = 0 OR jsonb_array_length(images) = 4
+  )
 );
 
 -- 创建索引

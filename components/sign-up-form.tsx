@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -27,6 +28,33 @@ export function SignUpForm({
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
+  // 将英文错误消息转换为中文
+  const getChineseErrorMessage = (error: any): string => {
+    const message = error?.message || error?.toString() || "";
+
+    if (message.includes("User already registered")) {
+      return "该邮箱已被注册，请使用其他邮箱或直接登录";
+    }
+    if (message.includes("Invalid email")) {
+      return "邮箱格式不正确，请检查后重试";
+    }
+    if (message.includes("Password should be at least")) {
+      return "密码长度至少需要6位字符";
+    }
+    if (message.includes("Password is too weak")) {
+      return "密码强度不够，请使用更复杂的密码";
+    }
+    if (message.includes("Email rate limit exceeded")) {
+      return "注册请求过于频繁，请稍后再试";
+    }
+    if (message.includes("Network")) {
+      return "网络连接失败，请检查网络后重试";
+    }
+
+    // 默认返回原始错误信息，但添加中文前缀
+    return `注册失败：${message}`;
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
@@ -34,7 +62,12 @@ export function SignUpForm({
     setError(null);
 
     if (password !== repeatPassword) {
-      setError("两次输入的密码不一致");
+      const errorMessage = "两次输入的密码不一致";
+      setError(errorMessage);
+      toast.error("注册失败", {
+        description: errorMessage,
+        duration: 5000,
+      });
       setIsLoading(false);
       return;
     }
@@ -47,10 +80,34 @@ export function SignUpForm({
           emailRedirectTo: `${window.location.origin}/protected`,
         },
       });
-      if (error) throw error;
-      router.push("/auth/sign-up-success");
+
+      if (error) {
+        const chineseMessage = getChineseErrorMessage(error);
+        setError(chineseMessage);
+        toast.error("注册失败", {
+          description: chineseMessage,
+          duration: 5000,
+        });
+        return;
+      }
+
+      // 注册成功
+      toast.success("注册成功", {
+        description: "请检查您的邮箱并点击验证链接",
+        duration: 3000,
+      });
+
+      // 延迟跳转，让用户看到成功提示
+      setTimeout(() => {
+        router.push("/auth/sign-up-success");
+      }, 1000);
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "注册时发生错误");
+      const chineseMessage = getChineseErrorMessage(error);
+      setError(chineseMessage);
+      toast.error("注册失败", {
+        description: chineseMessage,
+        duration: 5000,
+      });
     } finally {
       setIsLoading(false);
     }

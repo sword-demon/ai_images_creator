@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -26,6 +27,36 @@ export function LoginForm({
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
+  // 将英文错误消息转换为中文
+  const getChineseErrorMessage = (error: any): string => {
+    const message = error?.message || error?.toString() || "";
+
+    if (message.includes("Invalid login credentials")) {
+      return "邮箱或密码错误，请检查后重试";
+    }
+    if (message.includes("Email not confirmed")) {
+      return "请先验证您的邮箱地址";
+    }
+    if (message.includes("Too many requests")) {
+      return "登录尝试次数过多，请稍后再试";
+    }
+    if (message.includes("User not found")) {
+      return "用户不存在，请检查邮箱地址";
+    }
+    if (message.includes("Invalid email")) {
+      return "邮箱格式不正确";
+    }
+    if (message.includes("Password should be at least")) {
+      return "密码长度不符合要求";
+    }
+    if (message.includes("Network")) {
+      return "网络连接失败，请检查网络后重试";
+    }
+
+    // 默认返回原始错误信息，但添加中文前缀
+    return `登录失败：${message}`;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
@@ -37,11 +68,34 @@ export function LoginForm({
         email,
         password,
       });
-      if (error) throw error;
-      // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push("/protected");
+
+      if (error) {
+        const chineseMessage = getChineseErrorMessage(error);
+        setError(chineseMessage);
+        toast.error("登录失败", {
+          description: chineseMessage,
+          duration: 5000,
+        });
+        return;
+      }
+
+      // 登录成功
+      toast.success("登录成功", {
+        description: "欢迎回来！正在跳转...",
+        duration: 2000,
+      });
+
+      // 延迟跳转，让用户看到成功提示
+      setTimeout(() => {
+        router.push("/protected");
+      }, 1000);
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "登录时发生错误");
+      const chineseMessage = getChineseErrorMessage(error);
+      setError(chineseMessage);
+      toast.error("登录失败", {
+        description: chineseMessage,
+        duration: 5000,
+      });
     } finally {
       setIsLoading(false);
     }
