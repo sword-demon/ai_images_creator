@@ -4,7 +4,22 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Coins, Sparkles, X, AlertCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Plus,
+  Coins,
+  Sparkles,
+  X,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+} from "lucide-react";
 
 // 定义接口类型
 interface TaskResponse {
@@ -38,6 +53,8 @@ export default function ProtectedPage() {
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [error, setError] = useState<string>("");
   const [currentTaskId, setCurrentTaskId] = useState<string>("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // 创建图片生成任务
   const createImageTask = async (promptText: string): Promise<string> => {
@@ -138,6 +155,43 @@ export default function ProtectedPage() {
     setPrompt("");
   };
 
+  // 打开图片预览
+  const handleImagePreview = (index: number) => {
+    setCurrentImageIndex(index);
+    setPreviewOpen(true);
+  };
+
+  // 轮播图导航
+  const handlePreviousImage = () => {
+    setCurrentImageIndex((prev) =>
+      prev === 0 ? generatedImages.length - 1 : prev - 1
+    );
+  };
+
+  const handleNextImage = () => {
+    setCurrentImageIndex((prev) =>
+      prev === generatedImages.length - 1 ? 0 : prev + 1
+    );
+  };
+
+  // 下载图片
+  const handleDownloadImage = async (imageUrl: string, index: number) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `generated-image-${index + 1}.png`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("下载图片失败:", error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -208,7 +262,8 @@ export default function ProtectedPage() {
             generatedImages.map((image, index) => (
               <Card
                 key={index}
-                className="overflow-hidden group hover:shadow-lg transition-shadow"
+                className="overflow-hidden group hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => handleImagePreview(index)}
               >
                 <CardContent className="p-0">
                   <div className="relative aspect-square">
@@ -221,7 +276,15 @@ export default function ProtectedPage() {
                       1.00
                     </div>
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                      <Button size="sm" variant="secondary">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadImage(image, index);
+                        }}
+                      >
+                        <Download className="w-4 h-4 mr-1" />
                         下载
                       </Button>
                     </div>
@@ -299,6 +362,92 @@ export default function ProtectedPage() {
             </p>
           </div>
         )}
+
+        {/* 图片预览弹框 */}
+        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+            <DialogHeader className="p-6 pb-0">
+              <DialogTitle className="text-center">
+                图片预览 ({currentImageIndex + 1} / {generatedImages.length})
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="relative p-6">
+              {/* 主图片显示区域 */}
+              <div className="relative aspect-square max-h-[60vh] bg-gray-100 rounded-lg overflow-hidden">
+                <img
+                  src={generatedImages[currentImageIndex]}
+                  alt={`预览图片 ${currentImageIndex + 1}`}
+                  className="w-full h-full object-contain"
+                />
+
+                {/* 导航按钮 */}
+                {generatedImages.length > 1 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white"
+                      onClick={handlePreviousImage}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white"
+                      onClick={handleNextImage}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* 缩略图导航 */}
+              {generatedImages.length > 1 && (
+                <div className="mt-4 flex gap-2 justify-center overflow-x-auto">
+                  {generatedImages.map((image, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentImageIndex(index)}
+                      className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
+                        index === currentImageIndex
+                          ? "border-primary"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <img
+                        src={image}
+                        alt={`缩略图 ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 操作按钮 */}
+              <div className="mt-6 flex justify-center gap-4">
+                <Button
+                  onClick={() =>
+                    handleDownloadImage(
+                      generatedImages[currentImageIndex],
+                      currentImageIndex
+                    )
+                  }
+                  className="gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  下载图片
+                </Button>
+                <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+                  关闭
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
